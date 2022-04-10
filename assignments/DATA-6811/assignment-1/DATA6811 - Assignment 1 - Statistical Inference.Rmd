@@ -1,0 +1,46 @@
+---
+title: "Assignment 1 Statistical inference"
+author: "Wanchuang Zhu"
+date: "23/02/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Assignments
+
+**Q1.** Suppose $X\sim B(N,p)$, where $B(N,p)$ is the Binomial distribution whose Probability Mass Function is $P(X = k) = C_N^k p^k (1-p)^{N-k}$. The observations $(x_1,\cdots,x_n)$ are i.i.d samples of $X$. Given the prior distribution of $p$ as a Beta distribution with parameters as $\alpha_0,\beta_0$. The density function of the Beta distribution is $f(x\mid \alpha,\beta) = \frac{\Gamma(\alpha+\beta)}{\Gamma(\alpha) \Gamma(\beta)} x^{\alpha-1} (1-x)^{\beta-1}$. Derive the posterior distribution of $p$.
+
+
+**Ans 1.**
+
+Given that $X \sim B(N, p)$, the likelihood of i.i.d. samples $(x_i,\ldots,x_n)$ given the parameter $p$ is written as,
+
+$$f(x_1,\ldots,x_n \mid p) = \prod_{i=1}^n{N \choose x_i} p^{x_i}{(1-p)}^{N-x_i}$$
+
+Given the prior distribution of $p$ as $Beta(\alpha_0, \beta_0)$, the prior density is written as,
+
+$$\pi(p) = \frac{\Gamma(\alpha_0+\beta_0)}{\Gamma(\alpha_0) \Gamma(\beta_0)} x^{\alpha_0-1} (1-x)^{\beta_0-1}$$
+
+Posterior density $\pi(p \mid x_1, \ldots, x_n)$ is written as,
+
+\begin{align*}
+\pi(p \mid x_1, \ldots, x_n) & \propto f(x_1,\ldots,x_n \mid p) \pi(p) \\
+& \propto \prod_{i=1}^n{N \choose x_i} p^{x_i}{(1-p)}^{N-x_i} \frac{\Gamma(\alpha_0+\beta_0)}{\Gamma(\alpha_0) \Gamma(\beta_0)} x^{\alpha_0-1} (1-x)^{\beta_0-1} \\
+& \propto p^{\alpha_0 - 1 +\sum_i^n x_i} {(1 - p)}^{\beta_0 - 1 + N - \sum_i^n x_i}
+\end{align*}
+
+Now let sum of binomial samples be,
+$$x = \sum_{i=1}^n x_i$$
+
+After substitution, the posterior becomes,
+\begin{align*}
+\pi(p \mid x_1, \ldots, x_n) & \propto p^{\alpha_0 + x - 1} {(1 - p)}^{\beta_0 + N - x -1} \\
+\end{align*}
+
+So, $\pi(p \mid x_1, \ldots, x_n) \sim Beta(\alpha_n, \beta_n)$ where $\alpha_n = \alpha_0 + x$ and $\beta_n = \beta_0 + N + x$ 
+
