@@ -1,0 +1,83 @@
+---
+title: "DATA6810 - Graphical Models Assignment"
+author: "Arpit Kapoor"
+date: '2022-04-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+Given the following DAG,
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+library(bnlearn)
+bn = model2network("[A][B][C][E|A:B:C][F|A:C][G|E][H|E:F]")
+plot(bn,main="Figure 1")
+#> FALSE
+```
+
+Answer the following questions:
+
+**Q1. What is the Markov Blanket of $E$?**
+
+A1: The markov blanket of the node $E$ consists of the Parents, Children and the other parents of the children of $E$
+
+$$M(E) = \{B, A, C\} + \{G,H\} + \{F\} = \{A, B, C, F, G, H\}$$
+```{r}
+mb(bn,"E")
+```
+
+**Q2. Show expression for the joint distribution for the DAG**
+
+A2: The joint distribution of the DAG is given as:
+
+$$P(A,B,C,E,F,G,H) = P(A) P(B) P(C) P(E \mid A,B,C) P(F \mid A,C) P(G \mid E) P(H \mid E,F)$$
+
+**Q3. Assume $G$ is observed, are $B$ and $F$ conditionally independent given $G$ (ie. $B \!\perp\!\!\!\perp F \mid G$) ?**
+
+A3: No, $B$ and $F$ are not d-separated by $G$ as there exists a converging node $E$ between $B$ and $F$ whose descendant is $G$. 
+Therefore, 
+$$B \not\!\perp\!\!\!\perp F \mid G$$
+
+```{r}
+bnlearn::dsep(bn,"B","F","G")
+```
+
+
+**Q4. Assume $A$ and $C$ are observed, are $B$ and $F$ conditionally independent given $A$ and $C$ (ie. $B \!\perp\!\!\!\perp F \mid A, C$) ?**
+
+A4: Yes, both $E$ and $H$ have converging edges and none of them belong to ${A, C}$. Therefore, ${A, C}$ d-separate $B$ and $F$.
+$$B \!\perp\!\!\!\perp F \mid A, C$$
+
+```{r}
+bnlearn::dsep(bn,"B","F", c("A","C"))
+```
+
+
+
+**Q5. Explain the "Explaining away" effect and provide and example of it**
+
+A5: The "Explaining away" effect occurs in DAGs with converging node. In the figure below, node $C$ is a convergence node with $A$ and $B$ as its parents. In such cases, the nodes $A$ and $B$ are not independent given $C$. This is because if $C$ has occurred, knowing whether $A$ occurred or not provides some information about $B$ as well. 
+
+```{r echo=FALSE}
+ex_bn = model2network("[A][B][C|A:B]")
+plot(ex_bn,main="Figure 2")
+```
+
+Example:
+
+Let following be the RVs:
+
+$C \rightarrow$ Car's engine breaks down
+
+$A \rightarrow$ Battery is dead
+
+$B \rightarrow$ Problem in fuel supply
+
+If we know that the engine does not fail $(C=0)$, we can be sure that neither the car's battery is dead $(A=0)$ nor there is a problem with fuel supply $(B=0)$.
+
+However, if we know that the engine has failed $(C=1)$, the cause of this failure has to be one of the two mentioned cases ie. either the battery is dead $(A=1)$ or there is an issue with the fuel supply $(B=1)$. This means that given that the car breaks down, the probability for Battery being dead and probability of there being a problem with the fuel supply are not independent ie $A \not\!\perp\!\!\!\perp B \mid C$.
