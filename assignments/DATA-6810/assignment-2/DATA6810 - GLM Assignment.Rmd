@@ -1,0 +1,224 @@
+---
+title: "DATA6810 - GLM Assignment"
+author: "Arpit Kapoor"
+date: '2022-04-16'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE, echo=FALSE}
+library(tidyverse)
+library(mvtnorm)
+```
+
+## Import Data
+
+```{r import_data, echo = FALSE}
+woodlark <- read_csv("~/Desktop/DARE/DARE-PhD/assignments/DATA-6810/assignment-2/woodlark.csv")
+N = 71
+
+# I will be using the 2008 data, as suggested in the assignment description
+ggplot(woodlark) +
+  geom_point(aes(x = seq(1, N, 1), y = Y08)) +
+  theme_bw()
+
+# Input and dependent variables
+y <- woodlark$Y08
+t <- seq(1, N)
+x <- matrix(c(t, t^2), ncol = 2)
+X <- matrix(c(rep(1, N), t, t^2), ncol = 3)
+```
+
+## Part 1: Maximum Likelihood Estimate
+
+```{r part_1}
+# ------------------------------------------------------------------------------
+# ---------------------------- Part 1: MLE Estimates ---------------------------
+# ------------------------------------------------------------------------------
+
+# Fit GLM model with poisson family
+poisson_glm_fit <- glm(
+  formula = y ~ x,
+  family = poisson(link = "log"),
+  data.frame(y = y, t = x)
+)
+
+summary(poisson_glm_fit)
+
+# MLE estimates of mean and covariance for beta
+beta_hat <- matrix(summary(poisson_glm_fit)$coefficients[ , 1])
+V_hat <- summary(poisson_glm_fit)$cov.unscaled
+```
+
+
+## Part 2: Metropolis-Hastings MCMC
+
+```{r part_2}
+# ------------------------------------------------------------------------------
+# ---------------------------- Part 2: MCMC-MH ---------------------------------
+# ------------------------------------------------------------------------------
+
+sigma_beta <- diag(c(1^2, 0.25^2, 0.25^2))
+
+log_posterior <- function(beta, X, Y, sigma_beta){
+  
+  beta <- as.matrix(beta)
+  
+  lambda <- exp(X %*% beta)
+  
+  sum(X %*% beta * Y - exp(X %*% beta))  - 
+    0.5 * t(beta) %*% solve(sigma_beta) %*% beta
+  
+}
+
+Y <- matrix(y)
+
+n_mcmc <- 1000
+
+beta_sample <- array(NA, dim = c(3, 1, n_mcmc))
+accept_sample <- array(NA, dim = c(n_mcmc))
+
+beta_sample[ , , 1] <- beta_hat
+accept_sample[1] <- 1
+
+max_sightings_day_samples = array(NA, dim = c(n_mcmc))
+max_sightings_day_gt_40 = array(NA, dim = c(n_mcmc))
+
+
+for(i in 2:n_mcmc){
+  
+  cat(sprintf("\rIteration %i/%i", i, n_mcmc))
+  
+  beta_proposed <- c(rmvnorm(1, beta_hat, V_hat))
+  
+  lp_curr <- log_posterior(beta_sample[ , , i-1], X, Y, sigma_beta)
+  lp_prop <- log_posterior(beta_proposed, X, Y, sigma_beta)
+  
+  q_curr <- dmvnorm(beta_sample[ , , i-1], beta_hat, V_hat, log = TRUE)
+  q_prop <- dmvnorm(beta_proposed, beta_hat, V_hat, log = TRUE)
+  
+  alpha <- min(1, exp(lp_prop - lp_curr + q_curr - q_prop))
+  
+  u <- runif(1, 0, 1)
+  
+  if(alpha > u){
+    beta_sample[ , , i] <- beta_proposed
+    accept_sample[i] <- 1
+  } else {
+    beta_sample[ , , i] <- beta_sample[ , , i-1]
+    accept_sample[i] <- 0
+  }
+  
+  lambda <- exp(X %*% as.matrix(beta_sample[ , , i]))
+  y_pred <- array(NA, dim = c(N))
+  for (j in 1:N){
+    y_pred[j] <- rpois(1, lambda[j])
+  }
+  max_sightings_day_samples[i] = t[which.max(y_pred)]
+  
+  if(max_sightings_day_samples[i]>40){
+    max_sightings_day_gt_40[i] <- 1
+  } else {
+    beta_sample[ , , i] <- beta_sample[ , , i-1]
+    max_sightings_day_gt_40[i] <- 0
+  }
+
+}
+
+## Percent accepted samples
+length(which(accept_sample == 1))/n_mcmc
+
+
+print(length(which(max_sightings_day_gt_40 == 1))/n_mcmc)
+```
+
+## Part 3(a): Posterior of number of sightings
+
+```{r part_3a}
+
+# ------------------------------------------------------------------------------
+# ---------------------------- Part 3(a): Prediction ---------------------------
+# ------------------------------------------------------------------------------
+
+t <- seq(1, N)
+x <- matrix(c(t, t^2), ncol = 2)
+X <- matrix(c(rep(1, N), t, t^2), ncol = 3)
+
+lambda_sample <- array(NA, dim = c(N, n_mcmc))
+y_sample <- array(NA, dim = c(N, n_mcmc))
+
+for (i in 1:n_mcmc){
+  
+  lambda_sample[ , i] <- exp(X %*% beta_sample[ , , i])
+  
+  for (j in 1:N){
+    y_sample[j,i] <- rpois(1, lambda_sample[j, i])
+  }
+  
+}
+
+lambda_pred <- tibble(
+  x = t,
+  lower = apply(lambda_sample, 1, quantile, 0.05),
+  mean = apply(lambda_sample, 1, mean),
+  upper = apply(lambda_sample, 1, quantile, 0.95)
+)
+
+y_pred <- tibble(
+  x = t,
+  lower = apply(y_sample, 1, quantile, 0.05),
+  mean = apply(y_sample, 1, mean),
+  upper = apply(y_sample, 1, quantile, 0.95)
+)
+
+ggplot(lambda_pred, aes(x = x)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3) +
+  geom_line(aes(y = mean)) +
+  geom_point(data = tibble(x=t, y=y), aes(x = x, y = y)) +
+  geom_ribbon(
+    data = y_pred, 
+    aes(ymin = lower, ymax = upper), alpha = 0.3) +
+  theme_bw()
+
+```
+
+## Part 3(b): Posterior of day of max expected number of sightings
+
+```{r part_3b}
+# ------------------------------------------------------------------------------
+# --------------- Part 3(b): Maximum sightings day posterior  ------------------
+# ------------------------------------------------------------------------------
+
+ggplot(tibble(max_sight_day = max_sightings_day_samples), aes(max_sightings_day_samples)) + 
+  geom_histogram(aes(y=..density..), bins = 40) +
+  geom_density(col="red")
+```
+
+## Part 3(c): Probability of day with maximum number of sightings exceeding 40
+
+```{r part_3c}
+# ------------------------------------------------------------------------------
+# --------------- Part 3(c): Maximum sightings day > 40  ------------------
+# ------------------------------------------------------------------------------
+
+# Modelling as Normal distribution
+mu = mean(tail(max_sightings_day_samples, -2))
+sigma = sd(tail(max_sightings_day_samples, -2))
+
+print(1 - pnorm(40, mu, sigma))
+```
+
+
+
+## Part 4: Poisson Distribution suitability for the data
+
+A: It is evident from the prediction results (part 3a) most of the points in the data lie outside the 95% confidence interval of the prediction distribution. This shows that the trained model (poisson distribution) does not provide the best representation for the data. It appears that the number of sightings on a given day have a mean of 5.08 with a variance 85.27. Since, this appears to be a case of overdispersion, we can explore modelling this data using a negative-binomial distribution which can be considered and a more generalised form of the poisson distribution. A negative binomial distribution with high value of number of number of success (r) converges to a poisson distribution. 
+
+```{r}
+y_mean = mean(y)
+y_var = sd(y)^2
+```
+
